@@ -1,4 +1,3 @@
-var umkvl = require('unordered-materialized-kv-live')
 var level = require('level')
 var { EventEmitter } = require('events')
 var path = require('path')
