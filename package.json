@@ -4,6 +4,7 @@
     "hypercore-protocol": "^7.7.1",
     "kappa-core": "git://github.com/Frando/kappa-core.git#kappa5-new",
     "kappa-sparse-indexer": "git://github.com/Frando/kappa-sparse-indexer.git",
+    "pump": "^3.0.0",
     "readable-stream": "^3.4.0"
   },
   "devDependencies": {

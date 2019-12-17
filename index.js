@@ -4,9 +4,9 @@ var MStorage = require('multifeed-storage')
 var Replicate = require('multifeed-replicate')
 var { Writable } = require('readable-stream')
 var { EventEmitter } = require('events')
-var onend = require('end-of-stream')
 var Query = require('hypercore-query-extension')
 var Protocol = require('hypercore-protocol')
+var pump = require('pump')
 
 module.exports = Flow
 
@@ -20,7 +20,7 @@ function Flow (opts) {
   this._kcore = new Kappa
   this.api = this._kcore.view
   this._query = {}
-  this._replicators = []
+  this._added = {}
 }
 Flow.prototype = Object.create(EventEmitter.prototype)
 
@@ -39,37 +39,54 @@ Flow.prototype.use = function (name, view) {
 
 Flow.prototype.replicate = function (isInitiator, opts) {
   var self = this
-  var p = new Protocol(isInitiator, opts)
-  var r = new Replicate(self.feeds, p)
-  var h = { replicator: r, open: {} }
-  self._replicators.push(h)
-  var qs = {}
-  onend(p, function () {
-    var ix = self._replicators.indexOf(h)
-    if (ix >= 0) self._replicators.splice(ix,1)
-    Object.keys(qs).forEach(function (key) {
-      self._query[key].close(qs[key])
-    })
-  })
+  var p = new Protocol(isInitiator, { live: true, sparse: true })
+  p.on('error', function (err) {})
+  var r = new Replicate(self.feeds, p, { live: true, sparse: true })
+  var open = {}
   Object.keys(self._query).forEach(function (key) {
     var q = new Query({ api: self._query[key].api })
     p.registerExtension('query-' + key, q.extension())
-    qs[key] = q
-    self._query[key].open(q, new Writable({
-      objectMode: true,
-      write: function (row, enc, next) {
-        var hkey = row.key.toString('hex')
-        for (var i = 0; i < self._replicators.length; i++) {
-          var r = self._replicators[i]
-          if (!r.open[hkey]) {
-            r.open[hkey] = true
-            r.replicator.open(row.key)
+    if (typeof self._query[key].replicate === 'function') {
+      self._query[key].replicate({ query, protocol: p, replicate: r })
+    }
+    function query (name, arg) {
+      var s = q.query(name, arg)
+      pump(s, new Writable({
+        objectMode: true,
+        write: function (row, enc, next) {
+          var hkey = row.key.toString('hex')
+          if (!has(open,hkey)) {
+            open[hkey] = true
+            r.open(row.key)
           }
+          if (has(self._added, hkey)) {
+            self._indexer.download(row.key, row.seq)
+          } else {
+            self.feeds.getOrCreateRemote(row.key, function (err, feed) {
+              if (err) return self.emit('error', err)
+              self._added[hkey] = true
+              self._indexer.add(feed)
+            })
+          }
+          next()
         }
-        self._indexer.download(row.key, row.seq)
-        next()
-      }
-    }))
+      }))
+      return s
+    }
   })
   return p
+}
+
+Flow.prototype.addFeed = function (feed) {
+  var self = this
+  feed.ready(function () {
+    var hkey = feed.key.toString('hex')
+    if (self._added[hkey]) return
+    self._added[hkey] = true
+    self._indexer.add(feed)
+  })
+}
+
+function has (obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
 }

@@ -30,7 +30,11 @@ var split = require('split2')
 process.stdin.pipe(split()).on('data', function (buf) {
   var line = buf.toString(), m
   if (m = /^put (\S+) (\S+)(?:| (\S*))$/.exec(line)) {
-    var doc = { key: m[1], value: m[2], links: (m[3] || '').split(',') }
+    var doc = {
+      key: m[1],
+      value: m[2],
+      links: (m[3] || '').split(',').filter(Boolean)
+    }
     flow.api.kv.put(doc, function (err, id) {
       if (err) console.error(err)
       else console.log(id)

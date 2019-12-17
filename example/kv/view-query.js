@@ -1,100 +1,88 @@
-var umkvl = require('unordered-materialized-kv-live')
+var umkvps = require('unordered-materialized-kv-pubsub')
 var { EventEmitter } = require('events')
 var { Duplex } = require('readable-stream')
+var onend = require('end-of-stream')
 
 module.exports = function (flow, db) {
-  var kv = umkvl(db)
-  var refs = {}, queries = {}
-  kv.on('value', function (k, ids) {
+  var kv = umkvps(db)
+  var events = new EventEmitter
+  var session = kv.session(function (key, ids) {
     ids.forEach(function (id) {
       var [key,seq] = id.split('@')
-      ;(queries[k] || []).forEach(function (q) {
-        q.push({ key, seq })
-      })
+      lookupMsg({ key, seq })
     })
   })
-  var apiQ = { push: lookupMsg }
-  var events = new EventEmitter
-  var subs = {}
-  var openQueries = []
-
+  var queries = []
   return {
     map: function (msgs, next) {
-      kv.batch(msgs.map(msg => msg.value), next)
+      var batch = []
+      msgs.forEach(function (msg) {
+        if (!msg.value) return
+        batch.push({
+          id: msg.key + '@' + msg.seq,
+          key: msg.value.key,
+          links: msg.value.links
+        })
+      })
+      kv.batch(batch, next)
     },
     api: {
       events,
+      open: function (keys) {
+        session.open(keys)
+        queries.forEach(function (q) {
+          q.write(JSON.stringify(['open',keys])+'\n')
+        })
+      },
+      close: function (keys) {
+        session.close(keys)
+        queries.forEach(function (q) {
+          q.write(JSON.stringify(['close',keys])+'\n')
+        })
+      },
       put: function (doc, cb) {
         flow.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
         function onfeed (err, feed) {
           if (err) return cb(err)
+          flow.addFeed(feed)
           feed.append(doc, function (err, seq) {
             if (err) cb(err)
             else cb(null, feed.key.toString('hex') + '@' + seq)
           })
         }
-      },
-      open: function (keys) {
-        if (!Array.isArray(keys)) keys = [keys]
-        openQueries.forEach(function (q) {
-          q.write(Buffer.from(JSON.stringify(['o'].concat(keys))))
-        })
-        keys.forEach(function (key) {
-          openKey(key)
-          subs[key] = true
-          if (!queries[key]) queries[key] = apiQ
-          else queries[key].push(apiQ)
-        })
-      },
-      close: function (keys) {
-        if (!Array.isArray(keys)) keys = [keys]
-        openQueries.forEach(function (q) {
-          q.write(Buffer.from(JSON.stringify(['c'].concat(keys))))
-        })
-        keys.forEach(function (key) {
-          delete subs[key]
-          if (--refs[key] === 0) {
-            kv.close(key)
-            delete refs[key]
-          }
-          var ix = queries[key].indexOf(apiQ)
-          if (ix >= 0) queries[key].splice(ix,1)
-          if (queries[key].length === 0) delete queries[key]
-        })
       }
     },
     query: {
-      open: function (q, w) {
-        var arg = Buffer.from(JSON.stringify(Object.keys(subs)))
-        var r = q.query('open', arg)
-        openQueries.push(r)
-        r.pipe(w)
-      },
-      close: function (q) {
-        console.log('close...')
-      },
-      api: { open: openQuery }
+      api: { open },
+      replicate: function ({ query, protocol }) {
+        var arg = Buffer.from(JSON.stringify(session.getOpenKeys()))
+        var q = query('open', arg)
+        queries.push(q)
+        onend(protocol, function () {
+          var ix = queries.indexOf(q)
+          if (ix >= 0) queries.splice(ix,1)
+        })
+      }
     }
   }
-  function openQuery (buf) {
-    var keys = JSON.parse(buf)
-    keys.forEach(openQueryKey)
+  function open (buf) {
+    var session = kv.session(function (k, ids) {
+      ids.forEach(function (id) {
+        var [key,seq] = id.split('@')
+        stream.push({ key, seq })
+      })
+    })
+    session.open(JSON.parse(buf.toString()))
     var stream = new Duplex({
       readableObjectMode: true,
       read: function () {},
       write: function (buf, enc, next) {
         try { var msg = JSON.parse(buf) }
         catch (err) { return next() }
-        if (msg[0] === 'o') {
-          msg = msg.slice(1)
-          keys = keys.concat(msg)
-          msg.forEach(openQueryKey)
-        } else if (msg[0] === 'c') {
-          msg = msg.slice(1)
-          keys = keys.filter(function (key) {
-            return msg.indexOf(key) >= 0
-          })
-          msg.forEach(closeQueryKey)
+        if (msg[0] === 'open') {
+          session.open(msg.slice(1))
+        } else if (msg[0] === 'close') {
+          session.close(msg.slice(1))
         }
         next()
       },
@@ -104,33 +92,13 @@ module.exports = function (flow, db) {
         next()
       }
     })
+    queries.push(stream)
     return stream
     function cleanup () {
-      keys.forEach(function (key) {
-        if (--refs[key] === 0) {
-          kv.close(key)
-          delete refs[key]
-        }
-        var ix = queries[key].indexOf(stream)
-        if (ix >= 0) queries[key].splice(ix,1)
-        if (queries[key].length === 0) delete queries[key]
-      })
+      session.destroy()
+      var ix = queries.indexOf(stream)
+      if (ix >= 0) queries.splice(ix,1)
     }
-    function openQueryKey (key) {
-      openKey(key)
-      if (!queries[key]) queries[key] = [stream]
-      else queries[key].push(stream)
-    }
-    function closeQueryKey (key) {
-      console.log('TODO: closeQueryKey')
-    }
-  }
-  function openKey (key) {
-    if (!refs[key]) {
-      kv.open(key)
-      refs[key] = 0
-    }
-    refs[key]++
   }
   function lookupMsg ({ key, seq }) {
     flow.feeds.get(key, { valueEncoding: 'json' }, function (err, feed) {
