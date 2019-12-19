@@ -12,6 +12,7 @@ module.exports = Flow
 
 function Flow (opts) {
   if (!(this instanceof Flow)) return new Flow(opts)
+  if (!opts) opts = {}
   this.feeds = opts.feeds || new MStorage(opts.storage)
   this._indexer = new Indexer({
     db: opts.db,
@@ -21,6 +22,8 @@ function Flow (opts) {
   this.api = this._kcore.view
   this._query = {}
   this._added = {}
+  this._getOpts = {}
+  if (opts.valueEncoding) this._getOpts.valueEncoding = opts.valueEncoding
 }
 Flow.prototype = Object.create(EventEmitter.prototype)
 
@@ -54,24 +57,35 @@ Flow.prototype.replicate = function (isInitiator, opts) {
       pump(s, new Writable({
         objectMode: true,
         write: function (row, enc, next) {
-          var hkey = row.key.toString('hex')
-          if (!has(open,hkey)) {
-            open[hkey] = true
-            r.open(row.key)
+          if (Buffer.isBuffer(row.key)) {
+            var key = row.key
+            var hkey = row.key.toString('hex')
+          } else {
+            var hkey = row.key
+            var key = Buffer.from(hkey,'hex')
           }
           if (has(self._added, hkey)) {
-            self._indexer.download(row.key, row.seq)
+            self._indexer.download(key, row.seq)
           } else {
-            self.feeds.getOrCreateRemote(row.key, function (err, feed) {
-              if (err) return self.emit('error', err)
-              self._added[hkey] = true
-              self._indexer.add(feed)
+            self.feeds.getOrCreateRemote(key, self._getOpts, onfeed)
+          }
+          function onfeed (err, feed) {
+            if (err) return self.emit('error', err)
+            self._added[hkey] = true
+            self._indexer.add(feed, function () {
+              self._indexer.download(key, row.seq)
+              openFeed(key, hkey)
             })
           }
           next()
         }
       }))
       return s
+    }
+    function openFeed (key, hkey) {
+      if (has(open,hkey)) return
+      open[hkey] = true
+      r.open(key, { live: true, sparse: true })
     }
   })
   return p

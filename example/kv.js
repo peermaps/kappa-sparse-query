@@ -12,7 +12,10 @@ var db = level(path.join(argv.datadir,'db'))
 var sub = require('subleveldown')
 var flow = require('../')({
   db: sub(db,'flow'),
-  storage: p => raf(path.join(argv.datadir,p))
+  valueEncoding: 'json',
+  storage: p => {
+    return raf(path.join(argv.datadir,p))
+  }
 })
 
 flow.use('kv', require('./kv/view-query.js')(flow, sub(db,'kv')))

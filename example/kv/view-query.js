@@ -69,6 +69,7 @@ module.exports = function (flow, db) {
     var session = kv.session(function (k, ids) {
       ids.forEach(function (id) {
         var [key,seq] = id.split('@')
+        key = Buffer.from(key,'hex')
         stream.push({ key, seq })
       })
     })
@@ -77,7 +78,7 @@ module.exports = function (flow, db) {
       readableObjectMode: true,
       read: function () {},
       write: function (buf, enc, next) {
-        try { var msg = JSON.parse(buf) }
+        try { var msg = JSON.parse(buf.toString()) }
         catch (err) { return next() }
         if (msg[0] === 'open') {
           session.open(msg.slice(1))
