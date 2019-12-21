@@ -3,7 +3,7 @@
     "end-of-stream": "^1.4.4",
     "hypercore-protocol": "^7.7.1",
     "kappa-core": "git://github.com/Frando/kappa-core.git#kappa5-new",
-    "kappa-sparse-indexer": "^0.2.3",
+    "kappa-sparse-indexer": "^0.3.0",
     "pump": "^3.0.0",
     "readable-stream": "^3.4.0"
   },

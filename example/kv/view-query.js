@@ -15,16 +15,24 @@ module.exports = function (flow, db) {
   var queries = []
   return {
     map: function (msgs, next) {
-      var batch = []
+      var batch = [], pending = 1
+      console.log('msgs=',msgs)
       msgs.forEach(function (msg) {
-        if (!msg.value) return
-        batch.push({
-          id: msg.key + '@' + msg.seq,
-          key: msg.value.key,
-          links: msg.value.links
+        pending++
+        flow.feeds.get(msg.key, function (err, feed) {
+          if (err) return next(err)
+          feed.get(msg.seq, { valueEncoding: 'json' }, function (err, doc) {
+            if (err) return next(err)
+            batch.push({
+              id: msg.key + '@' + msg.seq,
+              key: doc.key,
+              links: doc.links
+            })
+            if (--pending === 0) kv.batch(batch, next)
+          })
         })
       })
-      kv.batch(batch, next)
+      if (--pending === 0) kv.batch(batch, next)
     },
     api: {
       events,
@@ -106,6 +114,7 @@ module.exports = function (flow, db) {
       if (err) return events.emit('error', err)
       feed.get(seq, function (err, doc) {
         if (err) return events.emit('error', err)
+        doc.id = key + '@' + seq
         events.emit('result', doc)
       })
     })

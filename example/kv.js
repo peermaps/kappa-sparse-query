@@ -19,8 +19,8 @@ var flow = require('../')({
 })
 
 flow.use('kv', require('./kv/view-query.js')(flow, sub(db,'kv')))
-flow.api.kv.events.on('result', function ({ key, value }) {
-  console.log(`${key} => ${value}`)
+flow.api.kv.events.on('result', function ({ key, value, id }) {
+  console.log(`${key} => ${value} [${id}]`)
 })
 
 var swarm = require('discovery-swarm')()
