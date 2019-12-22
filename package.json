@@ -2,13 +2,13 @@
   "dependencies": {
     "end-of-stream": "^1.4.4",
     "hypercore-protocol": "^7.7.1",
-    "kappa-core": "git://github.com/Frando/kappa-core.git#kappa5-new",
-    "kappa-sparse-indexer": "^0.3.0",
+    "kappa-sparse-indexer": "^0.3.1",
     "pump": "^3.0.0",
     "readable-stream": "^3.4.0"
   },
   "devDependencies": {
     "discovery-swarm": "^6.0.0",
+    "kappa-core": "git://github.com/Frando/kappa-core.git#kappa5-new",
     "hyperswarm": "^2.4.0",
     "level": "^6.0.0",
     "memdb": "^1.3.1",

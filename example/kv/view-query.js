@@ -3,7 +3,7 @@ var { EventEmitter } = require('events')
 var { Duplex } = require('readable-stream')
 var onend = require('end-of-stream')
 
-module.exports = function (flow, db) {
+module.exports = function (sq, db) {
   var kv = umkvps(db)
   var events = new EventEmitter
   var session = kv.session(function (key, ids) {
@@ -16,10 +16,9 @@ module.exports = function (flow, db) {
   return {
     map: function (msgs, next) {
       var batch = [], pending = 1
-      console.log('msgs=',msgs)
       msgs.forEach(function (msg) {
         pending++
-        flow.feeds.get(msg.key, function (err, feed) {
+        sq.feeds.get(msg.key, function (err, feed) {
           if (err) return next(err)
           feed.get(msg.seq, { valueEncoding: 'json' }, function (err, doc) {
             if (err) return next(err)
@@ -36,23 +35,23 @@ module.exports = function (flow, db) {
     },
     api: {
       events,
-      open: function (keys) {
+      open: function (core, keys) {
         session.open(keys)
         queries.forEach(function (q) {
           q.write(JSON.stringify(['open',keys])+'\n')
         })
       },
-      close: function (keys) {
+      close: function (core, keys) {
         session.close(keys)
         queries.forEach(function (q) {
           q.write(JSON.stringify(['close',keys])+'\n')
         })
       },
-      put: function (doc, cb) {
-        flow.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
+      put: function (core, doc, cb) {
+        sq.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
         function onfeed (err, feed) {
           if (err) return cb(err)
-          flow.addFeed(feed)
+          sq.addFeed(feed)
           feed.append(doc, function (err, seq) {
             if (err) cb(err)
             else cb(null, feed.key.toString('hex') + '@' + seq)
@@ -110,7 +109,7 @@ module.exports = function (flow, db) {
     }
   }
   function lookupMsg ({ key, seq }) {
-    flow.feeds.get(key, { valueEncoding: 'json' }, function (err, feed) {
+    sq.feeds.get(key, { valueEncoding: 'json' }, function (err, feed) {
       if (err) return events.emit('error', err)
       feed.get(seq, function (err, doc) {
         if (err) return events.emit('error', err)

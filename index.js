@@ -1,4 +1,3 @@
-var Kappa = require('kappa-core')
 var Indexer = require('kappa-sparse-indexer')
 var MStorage = require('multifeed-storage')
 var Replicate = require('multifeed-replicate')
@@ -8,46 +7,46 @@ var Query = require('hypercore-query-extension')
 var Protocol = require('hypercore-protocol')
 var pump = require('pump')
 
-module.exports = Flow
+module.exports = SQ
 
-function Flow (opts) {
-  if (!(this instanceof Flow)) return new Flow(opts)
+function SQ (opts) {
+  if (!(this instanceof SQ)) return new SQ(opts)
   if (!opts) opts = {}
   this.feeds = opts.feeds || new MStorage(opts.storage)
   this._indexer = new Indexer({
+    loadValue: false,
     db: opts.db,
     name: opts.name || 'flow'
   })
-  this._kcore = new Kappa
-  this.api = this._kcore.view
   this._query = {}
   this._added = {}
   this._getOpts = {}
   if (opts.valueEncoding) this._getOpts.valueEncoding = opts.valueEncoding
 }
-Flow.prototype = Object.create(EventEmitter.prototype)
+SQ.prototype = Object.create(EventEmitter.prototype)
 
-Flow.prototype.use = function (name, view) {
-  var v = Object.assign({}, view, { api: Object.assign({}, view.api) })
-  // take out kappa-core instance from method args:
-  Object.keys(v.api).forEach(function (key) {
-    if (typeof v.api[key] !== 'function') return
-    v.api[key] = function (kcore, ...args) {
-      return view.api[key](...args)
-    }
-  })
-  this._kcore.use(name, this._indexer.source(), v)
-  this._query[name] = view.query
+SQ.prototype.use = function (name, query) {
+  if (!query || typeof query !== 'object') {
+    throw new Error('query must be an object')
+  }
+  this._query[name] = query
 }
 
-Flow.prototype.replicate = function (isInitiator, opts) {
+SQ.prototype.source = function () {
+  return this._indexer.source()
+}
+
+SQ.prototype.replicate = function (isInitiator, opts) {
   var self = this
-  var p = new Protocol(isInitiator, { live: true, sparse: true })
+  if (!opts) opts = {}
+  var p = isInitiator && typeof isInitiator === 'object'
+    ? isInitiator
+    : opts.stream || new Protocol(isInitiator, { live: true, sparse: true })
   p.on('error', function (err) {})
   var r = new Replicate(self.feeds, p, { live: true, sparse: true })
   var open = {}
   Object.keys(self._query).forEach(function (key) {
-    var q = new Query({ api: self._query[key].api })
+    var q = new Query({ api: self._query[key].api || {} })
     p.registerExtension('query-' + key, q.extension())
     if (typeof self._query[key].replicate === 'function') {
       self._query[key].replicate({ query, protocol: p, replicate: r })
@@ -91,7 +90,7 @@ Flow.prototype.replicate = function (isInitiator, opts) {
   return p
 }
 
-Flow.prototype.addFeed = function (feed) {
+SQ.prototype.addFeed = function (feed) {
   var self = this
   feed.ready(function () {
     var hkey = feed.key.toString('hex')

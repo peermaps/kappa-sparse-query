@@ -10,22 +10,26 @@ var argv = minimist(process.argv.slice(2), {
 
 var db = level(path.join(argv.datadir,'db'))
 var sub = require('subleveldown')
-var flow = require('../')({
-  db: sub(db,'flow'),
+
+var sq = require('../')({
+  db: sub(db,'sq'),
   valueEncoding: 'json',
   storage: p => {
     return raf(path.join(argv.datadir,p))
   }
 })
+var core = new(require('kappa-core'))()
+var viewQuery = require('./kv/view-query.js')(sq, sub(db,'kv'))
+sq.use('kv', viewQuery.query)
+core.use('kv', sq.source(), viewQuery)
 
-flow.use('kv', require('./kv/view-query.js')(flow, sub(db,'kv')))
-flow.api.kv.events.on('result', function ({ key, value, id }) {
+core.view.kv.events.on('result', function ({ key, value, id }) {
   console.log(`${key} => ${value} [${id}]`)
 })
 
 var swarm = require('discovery-swarm')()
 swarm.on('connection', function (stream, info) {
-  stream.pipe(flow.replicate(info.initiator)).pipe(stream)
+  stream.pipe(sq.replicate(info.initiator)).pipe(stream)
 })
 swarm.join(argv.swarm)
 
@@ -38,13 +42,13 @@ process.stdin.pipe(split()).on('data', function (buf) {
       value: m[2],
       links: (m[3] || '').split(',').filter(Boolean)
     }
-    flow.api.kv.put(doc, function (err, id) {
+    core.api.kv.put(doc, function (err, id) {
       if (err) console.error(err)
       else console.log(id)
     })
   } else if (m = /^open (\S+)$/.exec(line)) {
-    flow.api.kv.open(m[1].split(','))
+    core.api.kv.open(m[1].split(','))
   } else if (m = /^close (\S+)$/.exec(line)) {
-    flow.api.kv.close(m[1].split(','))
+    core.api.kv.close(m[1].split(','))
   }
 })
