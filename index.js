@@ -90,16 +90,19 @@ SQ.prototype.replicate = function (isInitiator, opts) {
   return p
 }
 
-SQ.prototype.addFeed = function (feed) {
+SQ.prototype.addFeed = function (feed, cb) {
   var self = this
+  if (!cb) cb = noop
   feed.ready(function () {
     var hkey = feed.key.toString('hex')
-    if (self._added[hkey]) return
+    if (self._added[hkey]) return cb()
     self._added[hkey] = true
-    self._indexer.add(feed)
+    self._indexer.add(feed, cb)
   })
 }
 
 function has (obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key)
 }
+
+function noop () {}

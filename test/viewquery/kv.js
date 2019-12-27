@@ -47,6 +47,9 @@ module.exports = function (sq, db) {
           q.write(JSON.stringify(['close',keys])+'\n')
         })
       },
+      get: function (core, key, cb) {
+        kv.get(key, cb)
+      },
       put: function (core, doc, cb) {
         sq.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
         function onfeed (err, feed) {
