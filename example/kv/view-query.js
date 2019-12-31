@@ -51,11 +51,9 @@ module.exports = function (sq, db) {
         sq.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
         function onfeed (err, feed) {
           if (err) return cb(err)
-          sq.addFeed(feed, function () {
-            feed.append(doc, function (err, seq) {
-              if (err) cb(err)
-              else cb(null, feed.key.toString('hex') + '@' + seq)
-            })
+          feed.append(doc, function (err, seq) {
+            if (err) cb(err)
+            else cb(null, feed.key.toString('hex') + '@' + seq)
           })
         }
       }

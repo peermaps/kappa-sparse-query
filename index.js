@@ -3,6 +3,7 @@ var MStorage = require('multifeed-storage')
 var Replicate = require('multifeed-replicate')
 var { Writable } = require('readable-stream')
 var { EventEmitter } = require('events')
+var { nextTick } = process
 var Query = require('hypercore-query-extension')
 var Protocol = require('hypercore-protocol')
 var pump = require('pump')
@@ -10,18 +11,28 @@ var pump = require('pump')
 module.exports = SQ
 
 function SQ (opts) {
-  if (!(this instanceof SQ)) return new SQ(opts)
+  var self = this
+  if (!(self instanceof SQ)) return new SQ(opts)
   if (!opts) opts = {}
-  this.feeds = opts.feeds || new MStorage(opts.storage)
-  this._indexer = new Indexer({
+  self.feeds = opts.feeds || new MStorage(opts.storage)
+  self.feeds.on('create-local', function (feed) {
+    self._addFeed(feed)
+  })
+  self.feeds.on('create-remote', function (feed) {
+    self._addFeed(feed)
+  })
+  self.feeds.on('open', function (feed) {
+    self._addFeed(feed)
+  })
+  self._indexer = new Indexer({
     loadValue: false,
     db: opts.db,
     name: opts.name || 'flow'
   })
-  this._query = {}
-  this._added = {}
-  this._getOpts = {}
-  if (opts.valueEncoding) this._getOpts.valueEncoding = opts.valueEncoding
+  self._query = {}
+  self._added = {}
+  self._getOpts = {}
+  if (opts.valueEncoding) self._getOpts.valueEncoding = opts.valueEncoding
 }
 SQ.prototype = Object.create(EventEmitter.prototype)
 
@@ -71,10 +82,9 @@ SQ.prototype.replicate = function (isInitiator, opts) {
           function onfeed (err, feed) {
             if (err) return self.emit('error', err)
             self._added[hkey] = true
-            self._indexer.add(feed, function () {
-              self._indexer.download(key, row.seq)
-              openFeed(key, hkey)
-            })
+            self._indexer.addReady(feed)
+            self._indexer.download(key, row.seq)
+            openFeed(key, hkey)
           }
           next()
         }
@@ -90,15 +100,14 @@ SQ.prototype.replicate = function (isInitiator, opts) {
   return p
 }
 
-SQ.prototype.addFeed = function (feed, cb) {
+SQ.prototype._addFeed = function (feed, cb) {
   var self = this
   if (!cb) cb = noop
-  feed.ready(function () {
-    var hkey = feed.key.toString('hex')
-    if (self._added[hkey]) return cb()
-    self._added[hkey] = true
-    self._indexer.add(feed, cb)
-  })
+  // keys are assumed to be ready
+  var hkey = feed.key.toString('hex')
+  if (self._added[hkey]) return nextTick(cb)
+  self._added[hkey] = true
+  self._indexer.addReady(feed)
 }
 
 function has (obj, key) {

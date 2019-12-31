@@ -1,5 +1,4 @@
 var level = require('level')
-var { EventEmitter } = require('events')
 var path = require('path')
 var raf = require('random-access-file')
 
@@ -7,6 +6,7 @@ var minimist = require('minimist')
 var argv = minimist(process.argv.slice(2), {
   alias: { d: 'datadir', s: 'swarm' }
 })
+require('mkdirp').sync(argv.datadir)
 
 var db = level(path.join(argv.datadir,'db'))
 var sub = require('subleveldown')
