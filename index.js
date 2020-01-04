@@ -76,25 +76,21 @@ SQ.prototype.replicate = function (isInitiator, opts) {
           }
           if (has(self._added, hkey)) {
             self._indexer.download(key, row.seq)
+            next()
           } else {
             self.feeds.getOrCreateRemote(key, self._getOpts, onfeed)
           }
           function onfeed (err, feed) {
             if (err) return self.emit('error', err)
-            self._added[hkey] = true
-            self._indexer.addReady(feed)
             self._indexer.download(key, row.seq)
-            openFeed(key, hkey)
+            if (has(open,hkey)) return
+            open[hkey] = true
+            r.open(key, { live: true, sparse: true })
+            next()
           }
-          next()
         }
       }))
       return s
-    }
-    function openFeed (key, hkey) {
-      if (has(open,hkey)) return
-      open[hkey] = true
-      r.open(key, { live: true, sparse: true })
     }
   })
   return p

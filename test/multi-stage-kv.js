@@ -153,22 +153,20 @@ test('multi-stage key/value', function (t) {
   function phaseTwo () {
     var results = { A: [], B: [] }
     A.core.api.kv.events.on('result', function (result) {
-      console.log('RESULT:A', result)
       if (results.A.length > 0
       && result.id === results.A[results.A.length-1].id) return
       results.A.push(result)
       if (results.A.length === 1 && results.B.length === 1) writeOne()
       if (results.A.length === 2 && results.B.length === 2) writeTwo()
-      if (results.A.length === 3 && results.B.length === 3) checkTwo()
+      if (results.A.length === 3 && results.B.length === 3) checkTwo(results)
     })
     B.core.api.kv.events.on('result', function (result) {
-      console.log('RESULT:B', result)
       if (results.B.length > 0
       && result.id === results.B[results.B.length-1].id) return
       results.B.push(result)
       if (results.A.length === 1 && results.B.length === 1) writeOne()
       if (results.A.length === 2 && results.B.length === 2) writeTwo()
-      if (results.A.length === 3 && results.B.length === 3) checkTwo()
+      if (results.A.length === 3 && results.B.length === 3) checkTwo(results)
     })
     var r = {
       A: A.sq.replicate(true),
@@ -192,7 +190,7 @@ test('multi-stage key/value', function (t) {
       })
     }
   }
-  function checkTwo () {
+  function checkTwo (results) {
     A.core.api.kv.get('msg', function (err, ids) {
       t.ifError(err)
       t.deepEqual(ids, [results.A[2].id])
@@ -201,7 +199,7 @@ test('multi-stage key/value', function (t) {
       t.ifError(err)
       t.deepEqual(ids, [results.B[2].id])
     })
-    t.deepEqual(results.A, results.B)
+    t.deepEqual(results.A, results.B, 'results are synchronized')
     var expected = [
       {
         key: 'msg',
@@ -222,7 +220,7 @@ test('multi-stage key/value', function (t) {
         links: [puts[4]]
       }
     ]
-    t.deepEqual(results.A, expected)
+    t.deepEqual(results.A, expected, 'expected results')
   }
 })
 
@@ -232,18 +230,16 @@ function open (dir) {
     sq: level(path.join(dir,'sq')),
     vq: level(path.join(dir,'vq'))
   }
-  var stores = {}
   var sq = new SQ({
     db: db.sq,
     valueEncoding: 'json',
     storage: function (p) {
-      stores[p] = stores[p] || raf(path.join(dir,p))
-      return stores[p]
+      return raf(path.join(dir,p))
     }
   })
   var core = new Kappa
   var vq = viewQuery(sq, db.vq)
   core.use('kv', sq.source(), vq)
   sq.use('kv', vq.query)
-  return { sq, vq, db, stores, core, dir }
+  return { sq, vq, db, core, dir }
 }
