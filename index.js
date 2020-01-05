@@ -25,7 +25,6 @@ function SQ (opts) {
     self._addFeed(feed)
   })
   self._indexer = new Indexer({
-    loadValue: false,
     db: opts.db,
     name: opts.name || 'flow'
   })
