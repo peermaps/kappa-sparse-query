@@ -117,12 +117,11 @@ SQ.prototype.replicate = function (isInitiator, opts) {
   return p
 }
 
-SQ.prototype._addFeed = function (feed, cb) {
+SQ.prototype._addFeed = function (feed) {
   var self = this
-  if (!cb) cb = noop
   // keys are assumed to be ready
   var hkey = feed.key.toString('hex')
-  if (self._added[hkey]) return nextTick(cb)
+  if (self._added[hkey]) return
   self._added[hkey] = true
   self._indexer.addReady(feed)
 }
