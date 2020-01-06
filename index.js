@@ -7,6 +7,7 @@ var { nextTick } = process
 var Query = require('hypercore-query-extension')
 var Protocol = require('hypercore-protocol')
 var pump = require('pump')
+var onend = require('end-of-stream')
 
 module.exports = SQ
 
@@ -26,7 +27,16 @@ function SQ (opts) {
   })
   self._indexer = new Indexer({
     db: opts.db,
-    name: opts.name || 'flow'
+    name: opts.name || 'indexer',
+    loadValue: function (key, seq, next) {
+      self.feeds.get(key, function (err, feed) {
+        if (err) return next(err)
+        feed.get(seq, self._getOpts, function (err, value) {
+          if (err) next(err)
+          else next(null, { key, seq, value })
+        })
+      })
+    }
   })
   self._query = {}
   self._added = {}
@@ -54,7 +64,14 @@ SQ.prototype.replicate = function (isInitiator, opts) {
     : opts.stream || new Protocol(isInitiator, { live: true, sparse: true })
   p.on('error', function (err) {})
   var r = new Replicate(self.feeds, p, { live: true, sparse: true })
-  var open = {}
+  var open = {}, streams = []
+  onend(p, function (err) {
+    for (var i = 0; i < streams.length; i++) {
+      if (typeof streams[i].close === 'function') {
+        s.close()
+      }
+    }
+  })
   Object.keys(self._query).forEach(function (key) {
     var q = new Query({ api: self._query[key].api || {} })
     p.registerExtension('query-' + key, q.extension())
@@ -63,6 +80,11 @@ SQ.prototype.replicate = function (isInitiator, opts) {
     }
     function query (name, arg) {
       var s = q.query(name, arg)
+      streams.push(s)
+      onend(s, function () {
+        var ix = streams.indexOf(s)
+        if (ix >= 0) streams.splice(s,1)
+      })
       pump(s, new Writable({
         objectMode: true,
         write: function (row, enc, next) {

@@ -15,23 +15,13 @@ module.exports = function (sq, db) {
   var queries = []
   return {
     map: function (msgs, next) {
-      var batch = [], pending = 1
-      msgs.forEach(function (msg) {
-        pending++
-        sq.feeds.get(msg.key, function (err, feed) {
-          if (err) return next(err)
-          feed.get(msg.seq, { valueEncoding: 'json' }, function (err, doc) {
-            if (err) return next(err)
-            batch.push({
-              id: msg.key + '@' + msg.seq,
-              key: doc.key,
-              links: doc.links
-            })
-            if (--pending === 0) kv.batch(batch, next)
-          })
-        })
-      })
-      if (--pending === 0) kv.batch(batch, next)
+      kv.batch(msgs.map(function (msg) {
+        return {
+          id: msg.key + '@' + msg.seq,
+          key: msg.value.key,
+          links: msg.value.links
+        }
+      }), next)
     },
     api: {
       events,
