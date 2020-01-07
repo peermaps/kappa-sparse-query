@@ -6,7 +6,7 @@
     "end-of-stream": "^1.4.4",
     "hypercore-protocol": "^7.7.1",
     "hypercore-query-extension": "^1.2.0",
-    "kappa-sparse-indexer": "git://github.com/substack/kappa-sparse-indexer#add-ready",
+    "kappa-sparse-indexer": "0.3.2",
     "multifeed-replicate": "^1.0.1",
     "multifeed-storage": "^1.1.0",
     "pump": "^3.0.0",
