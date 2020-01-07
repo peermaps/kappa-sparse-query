@@ -1,6 +1,6 @@
 {
   "name": "kappa-sparse-query",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "replicate feeds for kappa-core@experimental views using sparse queries",
   "dependencies": {
     "end-of-stream": "^1.4.4",
