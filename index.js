@@ -8,6 +8,7 @@ var Query = require('hypercore-query-extension')
 var Protocol = require('hypercore-protocol')
 var pump = require('pump')
 var onend = require('end-of-stream')
+var sub = require('subleveldown')
 
 module.exports = SQ
 
@@ -15,6 +16,7 @@ function SQ (opts) {
   var self = this
   if (!(self instanceof SQ)) return new SQ(opts)
   if (!opts) opts = {}
+  self._db = opts.db
   self.feeds = opts.feeds || new MStorage(opts.storage)
   self.feeds.on('create-local', function (feed) {
     self._addFeed(feed)
@@ -25,25 +27,33 @@ function SQ (opts) {
   self.feeds.on('open', function (feed) {
     self._addFeed(feed)
   })
-  self._indexer = new Indexer({
-    db: opts.db,
-    name: opts.name || 'indexer',
-    loadValue: function (key, seq, next) {
-      self.feeds.get(key, function (err, feed) {
-        if (err) return next(err)
-        feed.get(seq, self._getOpts, function (err, value) {
-          if (err) next(err)
-          else next(null, { key, seq, value })
-        })
-      })
-    }
-  })
+  self._indexers = {}
   self._query = {}
   self._added = {}
   self._getOpts = {}
   if (opts.valueEncoding) self._getOpts.valueEncoding = opts.valueEncoding
 }
 SQ.prototype = Object.create(EventEmitter.prototype)
+
+SQ.prototype._getIndexer = function (type) {
+  var self = this
+  if (!self._indexers.hasOwnProperty(type)) {
+    self._indexers[type] = new Indexer({
+      db: sub(self._db, type),
+      name: type,
+      loadValue: function (key, seq, next) {
+        self.feeds.get(key, function (err, feed) {
+          if (err) return next(err)
+          feed.get(seq, self._getOpts, function (err, value) {
+            if (err) next(err)
+            else next(null, { key, seq, value })
+          })
+        })
+      }
+    })
+  }
+  return self._indexers[type]
+}
 
 SQ.prototype.use = function (name, query) {
   if (!query || typeof query !== 'object') {
@@ -52,8 +62,8 @@ SQ.prototype.use = function (name, query) {
   this._query[name] = query
 }
 
-SQ.prototype.source = function () {
-  return this._indexer.source()
+SQ.prototype.source = function (type) {
+  return this._getIndexer(type).source()
 }
 
 SQ.prototype.replicate = function (isInitiator, opts) {
@@ -72,11 +82,11 @@ SQ.prototype.replicate = function (isInitiator, opts) {
       }
     }
   })
-  Object.keys(self._query).forEach(function (key) {
-    var q = new Query({ api: self._query[key].api || {} })
-    p.registerExtension('query-' + key, q.extension())
-    if (typeof self._query[key].replicate === 'function') {
-      self._query[key].replicate({ query, protocol: p, replicate: r })
+  Object.keys(self._query).forEach(function (type) {
+    var q = new Query({ api: self._query[type].api || {} })
+    p.registerExtension('query-' + type, q.extension())
+    if (typeof self._query[type].replicate === 'function') {
+      self._query[type].replicate({ query, protocol: p, replicate: r })
     }
     function query (name, arg) {
       var s = q.query(name, arg)
@@ -96,17 +106,18 @@ SQ.prototype.replicate = function (isInitiator, opts) {
             var key = Buffer.from(hkey,'hex')
           }
           if (has(self._added, hkey)) {
-            self._indexer.download(key, row.seq)
+            self._getIndexer(type).download(key, row.seq)
             next()
           } else {
             self.feeds.getOrCreateRemote(key, self._getOpts, onfeed)
           }
           function onfeed (err, feed) {
             if (err) return self.emit('error', err)
-            self._indexer.download(key, row.seq)
-            if (has(open,hkey)) return
-            open[hkey] = true
-            r.open(key, { live: true, sparse: true })
+            self._getIndexer(type).download(key, row.seq)
+            if (!has(open,hkey)) {
+              open[hkey] = true
+              r.open(key, { live: true, sparse: true })
+            }
             next()
           }
         }
@@ -123,7 +134,9 @@ SQ.prototype._addFeed = function (feed) {
   var hkey = feed.key.toString('hex')
   if (self._added[hkey]) return
   self._added[hkey] = true
-  self._indexer.addReady(feed)
+  Object.keys(self._indexers).forEach(function (type) {
+    self._indexers[type].addReady(feed)
+  })
 }
 
 function has (obj, key) {
