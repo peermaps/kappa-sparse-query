@@ -18,8 +18,8 @@ module.exports = function (sq, db) {
       kv.batch(msgs.map(function (msg) {
         return {
           id: msg.key + '@' + msg.seq,
-          key: doc.key,
-          links: doc.links
+          key: msg.value.key,
+          links: msg.value.links
         }
       }), next)
     },

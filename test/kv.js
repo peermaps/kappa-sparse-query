@@ -97,24 +97,28 @@ test('in memory key/value', function (t) {
     t.deepEqual(results.A, results.B)
     var expected = [
       {
+        type: 'kv',
         key: 'msg',
         value: 'hi',
         id: puts[0],
         links: []
       },
       {
+        type: 'kv',
         key: 'msg',
         value: 'ok...',
         id: puts[1],
         links: [puts[0]]
       },
       {
+        type: 'kv',
         key: 'msg',
         value: 'fork',
         id: puts[2],
         links: [puts[0]]
       },
       {
+        type: 'kv',
         key: 'msg',
         value: 'merged',
         id: puts[3],

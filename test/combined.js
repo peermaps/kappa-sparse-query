@@ -10,7 +10,7 @@ var viewQuery = {
 }
 
 test('combined', function (t) {
-  t.plan(10)
+  t.plan(20)
   var sq = {
     A: new SQ({ db: memdb(), valueEncoding: 'json', storage: ram }),
     B: new SQ({ db: memdb(), valueEncoding: 'json', storage: ram })
@@ -30,13 +30,14 @@ test('combined', function (t) {
   sq.B.use('kv', vq.kv.B.query)
   sq.A.use('counter', vq.counter.A.query)
   sq.B.use('counter', vq.counter.B.query)
-  core.A.use('kv', sq.A.source(), vq.kv.A)
-  core.B.use('kv', sq.B.source(), vq.kv.B)
-  core.A.use('counter', sq.A.source(), vq.counter.A)
-  core.B.use('counter', sq.B.source(), vq.counter.B)
+  core.A.use('kv', sq.A.source('kv'), vq.kv.A)
+  core.B.use('kv', sq.B.source('kv'), vq.kv.B)
+  core.A.use('counter', sq.A.source('counter'), vq.counter.A)
+  core.B.use('counter', sq.B.source('counter'), vq.counter.B)
 
   ;(function counter () {
     var results = { A: [], B: [] }
+    var written = 0
     core.A.view.counter.events .on('counter', (key,n) => {
       results.A.push({key,n})
       if (results.A.length === written && results.B.length === written) write()
@@ -60,7 +61,6 @@ test('combined', function (t) {
       { core: 'B', key: 'e', n: 11 },
       { core: 'A', key: 'd', n: 2 }
     ]
-    var written = 0
     process.nextTick(write)
 
     function write () {
@@ -95,13 +95,14 @@ test('combined', function (t) {
       && result.id === results.A[results.A.length-1].id) return
       results.A.push(result)
       if (results.A.length === 1) {
-        var doc = { key: 'msg', value: 'ok...', links: [result.id] }
+        var doc = { type: 'kv', key: 'msg', value: 'ok...', links: [result.id] }
         core.A.api.kv.put(doc, function (err, id) {
           t.ifError(err)
           puts.push(id)
         })
       } else if (results.A.length === 3) {
         var doc = {
+          type: 'kv',
           key: 'msg',
           value: 'merged',
           links: [results.A[1].id,results.A[2].id]
@@ -119,7 +120,7 @@ test('combined', function (t) {
       && result.id === results.B[results.B.length-1].id) return
       results.B.push(result)
       if (results.B.length === 2) {
-        var doc = { key: 'msg', value: 'fork', links: [results.B[0].id] }
+        var doc = { type: 'kv', key: 'msg', value: 'fork', links: [results.B[0].id] }
         core.B.api.kv.put(doc, function (err, id) {
           t.ifError(err)
           puts.push(id)
@@ -137,7 +138,7 @@ test('combined', function (t) {
     }
     r.A.pipe(r.B).pipe(r.A)
 
-    var doc = { key: 'msg', value: 'hi', links: [] }
+    var doc = { type: 'kv', key: 'msg', value: 'hi', links: [] }
     core.A.api.kv.put(doc, function (err, id) {
       t.ifError(err)
       puts.push(id)
@@ -152,27 +153,31 @@ test('combined', function (t) {
         t.ifError(err)
         t.deepEqual(ids, [results.B[3].id])
       })
-      t.deepEqual(results.A, results.B)
+      t.deepEqual(results.A, results.B, 'A matches B')
       var expected = [
         {
+          type: 'kv',
           key: 'msg',
           value: 'hi',
           id: puts[0],
           links: []
         },
         {
+          type: 'kv',
           key: 'msg',
           value: 'ok...',
           id: puts[1],
           links: [puts[0]]
         },
         {
+          type: 'kv',
           key: 'msg',
           value: 'fork',
           id: puts[2],
           links: [puts[0]]
         },
         {
+          type: 'kv',
           key: 'msg',
           value: 'merged',
           id: puts[3],

@@ -13,8 +13,8 @@ var core = { A: new Kappa, B: new Kappa }
 var vq = { A: viewQuery(sq.A), B: viewQuery(sq.B) }
 sq.A.use('counter', vq.A.query)
 sq.B.use('counter', vq.B.query)
-core.A.use('counter', sq.A.source(), vq.A)
-core.B.use('counter', sq.B.source(), vq.B)
+core.A.use('counter', sq.A.source('counter'), vq.A)
+core.B.use('counter', sq.B.source('counter'), vq.B)
 
 core.A.view.counter.events
   .on('counter', (key,n) => console.log(`A:${key}=${n}`))

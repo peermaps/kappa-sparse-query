@@ -42,7 +42,7 @@ SQ.prototype._getIndexer = function (type) {
       db: sub(self._db, type),
       name: type,
       loadValue: function (key, seq, next) {
-        self.feeds.get(key, function (err, feed) {
+        self.feeds.get(key, self._getOpts, function (err, feed) {
           if (err) return next(err)
           feed.get(seq, self._getOpts, function (err, value) {
             if (err) next(err)
@@ -106,18 +106,20 @@ SQ.prototype.replicate = function (isInitiator, opts) {
             var key = Buffer.from(hkey,'hex')
           }
           if (has(self._added, hkey)) {
-            self._getIndexer(type).download(key, row.seq)
-            next()
+            download()
           } else {
             self.feeds.getOrCreateRemote(key, self._getOpts, onfeed)
           }
           function onfeed (err, feed) {
-            if (err) return self.emit('error', err)
-            self._getIndexer(type).download(key, row.seq)
+            if (err) self.emit('error', err)
+            else download()
+          }
+          function download () {
             if (!has(open,hkey)) {
               open[hkey] = true
               r.open(key, { live: true, sparse: true })
             }
+            self._getIndexer(type).download(key, row.seq)
             next()
           }
         }

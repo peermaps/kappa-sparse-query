@@ -6,6 +6,7 @@ module.exports = function viewQuery (sq) {
   var events = new EventEmitter
   return {
     map: function (msgs, next) {
+      msgs = msgs.filter(msg => msg.value && msg.value.type === 'counter')
       msgs.forEach((msg) => {
         if (msg.value.n > (counter[msg.value.key] || 0)) {
           heads[msg.value.key] = { key: msg.key, seq: msg.seq }
@@ -22,7 +23,7 @@ module.exports = function viewQuery (sq) {
         sq.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
         function onfeed (err, feed) {
           if (err) return cb(err)
-          else feed.append({ key, n: (counter[key] || 0) + n }, cb)
+          else feed.append({ type: 'counter', key, n: (counter[key] || 0) + n }, cb)
         }
       }
     },

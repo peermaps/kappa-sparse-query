@@ -38,18 +38,18 @@ test('many-stage key/value', function (t) {
     ]
   ]
   var expected = [
-    { feed: 'A', value: 'msg 0', links: [], seq: 0 },
-    { feed: 'B', value: 'msg 1', links: ['A@0'], seq: 0 },
-    { feed: 'A', value: 'msg 2', links: ['B@0'], seq: 1 },
-    { feed: 'A', value: 'msg 3.1', links: ['A@1'], seq: 2 },
-    { feed: 'B', value: 'msg 3.2', links: ['A@1'], seq: 1 },
-    { feed: 'A', value: 'msg 4', links: ['A@2','B@1'], seq: 3 },
-    { feed: 'B', value: 'msg 5.1', links: ['A@3'], seq: 2 },
-    { feed: 'B', value: 'msg 5.2', links: ['A@3'], seq: 3 },
-    { feed: 'A', value: 'msg 5.3', links: ['A@3'], seq: 4 },
-    { feed: 'B', value: 'msg 6', links: ['B@2','B@3','A@4'], seq: 4 },
-    { feed: 'A', value: 'msg 5.4', links: ['A@3'], seq: 5 },
-    { feed: 'B', value: 'msg 7', links: ['A@5','B@4'], seq: 5 }
+    { type: 'kv', feed: 'A', value: 'msg 0', links: [], seq: 0 },
+    { type: 'kv', feed: 'B', value: 'msg 1', links: ['A@0'], seq: 0 },
+    { type: 'kv', feed: 'A', value: 'msg 2', links: ['B@0'], seq: 1 },
+    { type: 'kv', feed: 'A', value: 'msg 3.1', links: ['A@1'], seq: 2 },
+    { type: 'kv', feed: 'B', value: 'msg 3.2', links: ['A@1'], seq: 1 },
+    { type: 'kv', feed: 'A', value: 'msg 4', links: ['A@2','B@1'], seq: 3 },
+    { type: 'kv', feed: 'B', value: 'msg 5.1', links: ['A@3'], seq: 2 },
+    { type: 'kv', feed: 'B', value: 'msg 5.2', links: ['A@3'], seq: 3 },
+    { type: 'kv', feed: 'A', value: 'msg 5.3', links: ['A@3'], seq: 4 },
+    { type: 'kv', feed: 'B', value: 'msg 6', links: ['B@2','B@3','A@4'], seq: 4 },
+    { type: 'kv', feed: 'A', value: 'msg 5.4', links: ['A@3'], seq: 5 },
+    { type: 'kv', feed: 'B', value: 'msg 7', links: ['A@5','B@4'], seq: 5 }
   ]
   var results = { A: [], B: [] }
   var feedKeys = {}
@@ -138,6 +138,7 @@ test('many-stage key/value', function (t) {
     t.deepEqual(results.A, results.B)
     t.deepEqual(results.A, expected.map(function (result) {
       return {
+        type: 'kv',
         id: feedKeys[result.feed] + '@' + result.seq,
         key: 'msg',
         value: result.value,

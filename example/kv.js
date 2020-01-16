@@ -21,7 +21,7 @@ var sq = require('../')({
 var core = new(require('kappa-core'))()
 var viewQuery = require('./kv/view-query.js')(sq, sub(db,'kv'))
 sq.use('kv', viewQuery.query)
-core.use('kv', sq.source(), viewQuery)
+core.use('kv', sq.source('kv'), viewQuery)
 
 core.view.kv.events.on('result', function ({ key, value, id }) {
   console.log(`${key} => ${value} [${id}]`)

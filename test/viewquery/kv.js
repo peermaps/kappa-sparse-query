@@ -15,6 +15,7 @@ module.exports = function (sq, db) {
   var queries = []
   return {
     map: function (msgs, next) {
+      msgs = msgs.filter(msg => msg.value && msg.value.type === 'kv')
       kv.batch(msgs.map(function (msg) {
         return {
           id: msg.key + '@' + msg.seq,
@@ -41,6 +42,7 @@ module.exports = function (sq, db) {
         kv.get(key, cb)
       },
       put: function (core, doc, cb) {
+        doc.type = 'kv'
         sq.feeds.getOrCreateLocal('default', { valueEncoding: 'json' }, onfeed)
         function onfeed (err, feed) {
           if (err) return cb(err)
